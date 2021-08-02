@@ -6,10 +6,11 @@
 #
 # Détails:
 #
-
+# =======================
 
 ##
-# Path du script (Fonctionne même s'il est lancé par un lien symbolique)
+# Retourne le path du script
+# 0 paramètres
 ##
 function scriptPath() {
     SOURCE=${BASH_SOURCE[0]}
@@ -23,15 +24,18 @@ function scriptPath() {
 }
 
 ##
-# Retourne le point de montage du path du script
+# Retourne le point de montage d'un dossier existant (dans notre cas, le path du script)
+# 1 Paramètre:
+# $1: Path d'un dossier (avec ou sans le / final) qui doit exister (sinon erreur)
 ##
 function pointMontage {
-  # pointMontage=$(df $(scriptPath) | tail -1 | awk '{ print $6 }') # Méthode 1
-  # pointMontage=$(stat -c '%m' $(scriptPath)) # Méthode 2
-  pointMontage=$(df --output=target $(scriptPath) | tail -1) # Méthode 3
-  echo $pointMontage
+    # Trouvé ici: https://stackoverflow.com/questions/2167558/give-the-mount-point-of-a-path
+    # pointMontage=$(df $(scriptPath) | tail -1 | awk '{ print $6 }') # Méthode 1
+    # pointMontage=$(stat -c '%m' $(scriptPath)) # Méthode 2
+    # pointMontage=$(df --output=target $(scriptPath) | tail -1) # Méthode 3
+    pointMontage=$(df --output=target $1 | tail -1) # Méthode 3
+    echo $pointMontage
 }
-
 
 # =======================
 # Variables
@@ -47,21 +51,24 @@ NONE_BG='\e[49m'
 MAGENTA_BG='\e[45m'
 GREEN_BG='\033[42m'
 RED_BG='\e[41m'
-
-source=$(pointMontage)"/sauvegarde/"
-
 # =======================
-
 
 ##
 # Synchronise avec rsync 1 dossier source vers un dossier cible.
 # C'est une synchronisation de type miroir (option delete sur la cible)
 ##
 function synchroLocal() {
-    # Affecter les variables
-    local source="/media/eric/565174ef-03fa-4893-81f5-ddaa698f7d81/sauvegarde/"
-    local cible="/media/eric/P1/copie_de_sauvegarde/"
-    local backup="/media/eric/P1/_backup_copie_de_sauvegarde/"
+    # Affectation les variables
+    local source=$(pointMontage $(scriptPath))"/sauvegarde/"
+    # Nom des ordinateurs et leurs points de montages
+    case "$HOSTNAME" in
+        "fixe-saverne") pointMontageCible="/media/eric/P1";;
+        "eric-laptop-sony") pointMontageCible="/home/eric";;
+        "HP-Laptop-15-bs1xx") pointMontageCible="/home/eric";;
+        "Lenovo-ideapad-120S-14IAP") pointMontageCible="/media/eric/e01664b6-44d8-42d3-9ddf-334b7128a8ff";;
+    esac
+    local cible=$pointMontageCible"/copie_de_sauvegarde/"
+    local backup=$pointMontageCible"/_backup_copie_de_sauvegarde/"
     # Gestion des erreurs si l'un des dossiers n'existe pas
     err=""
     if [ ! -d "$source" ]; then
@@ -108,15 +115,16 @@ function synchroLocal() {
         echo -e "$RED"
     fi
     # rsync réel
-    chmod -R 700 "$cible" "$backup" &&
+    # chmod -R 700 "$cible" "$backup" &&
+    chmod -R u+w "$cible" "$backup" &&
         rsync -rtb --backup-dir=$backup"backup_"$(date +%F)_$(date +%T) --log-format=%n%L --delete --modify-window=1 --exclude=".*" -s $source $cible
-    chmod -R 500 "$cible" "$backup" &&
+    # chmod -R 500 "$cible" "$backup" &&
+    chmod -R u-w "$cible" "$backup" &&
         echo -e "$BLACK $GREEN_BG"
     echo "Terminé"
     echo "Pour quitter, appuyez sur Entrée"
     echo -e "$NONE $NONE_BG"
     read
 }
-
 
 synchroLocal
