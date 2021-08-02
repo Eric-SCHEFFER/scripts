@@ -9,7 +9,7 @@
 
 
 ##
-# Chemin complet du script (Fonctionne même s'il est lancé par un lien symbolique)
+# Path du script (Fonctionne même s'il est lancé par un lien symbolique)
 ##
 function scriptPath() {
     SOURCE=${BASH_SOURCE[0]}
@@ -20,6 +20,16 @@ function scriptPath() {
     done
     DIR=$(cd -P $(dirname $SOURCE) && pwd)
     echo $DIR
+}
+
+##
+# Retourne le point de montage du path du script
+##
+function pointMontage {
+  # pointMontage=$(df $(scriptPath) | tail -1 | awk '{ print $6 }') # Méthode 1
+  # pointMontage=$(stat -c '%m' $(scriptPath)) # Méthode 2
+  pointMontage=$(df --output=target $(scriptPath) | tail -1) # Méthode 3
+  echo $pointMontage
 }
 
 
@@ -38,14 +48,9 @@ MAGENTA_BG='\e[45m'
 GREEN_BG='\033[42m'
 RED_BG='\e[41m'
 
-# On met le résultat de la fontion scriptPath dans une variable
-scriptPath=$(scriptPath)
-# =======================
+source=$(pointMontage)"/sauvegarde/"
 
-# TODO: Extraire le path du dossier source sur le path du script, en utilisant sed
-# chaine="ceci est une chaine de caractères"
-# echo $chaine | sed -e "s/ /_/g"
-# exit
+# =======================
 
 
 ##
@@ -77,25 +82,24 @@ function synchroLocal() {
     echo -e "$CYAN"
     sortie=""
     # rsync dry run
-    # Redirection avec tee de la sortie sdt vers le terminal, car on la capture dans une variable ($sortie)
-    sortie=$(rsync -rntb --backup-dir=$backup"backup_"$(date +%F)_$(date +%T) --log-format=%n%L --delete --modify-window=1 -s $source $cible | tee /dev/tty)
+    # On capture la sortie de la commande dans une variable, et on la duplique avec tee vers le terminal
+    sortie=$(rsync -rntb --backup-dir=$backup"backup_"$(date +%F)_$(date +%T) --log-format=%n%L --delete --modify-window=1 --exclude=".*" -s $source $cible | tee /dev/tty)
+    echo -e "$NONE $NONE_BG"
     if [ -z "$sortie" ]; then
-        echo -e "$BLACK $GREEN_BG"
         echo -e "Rsync (options delete et backup) de:\n"
         echo "Source (sur $HOSTNAME): $source"
         echo "vers"
-        echo -e "Cible (sur $HOSTNAME): $cible\n"
-        echo "Les dossiers sont déjà synchronisés"
+        echo -e "Cible (sur $HOSTNAME): $cible\n $BLACK $GREEN_BG"
+        echo "Rien à faire, les dossiers sont déjà synchronisés"
         echo "Pour quitter, appuyez sur Entrée"
         echo -e "$NONE $NONE_BG"
         read
         exit
     else
-        echo -e "$BLACK $GREEN_BG"
         echo -e "Rsync (options delete et backup) de:\n"
         echo "Source (sur $HOSTNAME): $source"
         echo "vers"
-        echo -e "Cible (sur $HOSTNAME): $cible\n"
+        echo -e "Cible (sur $HOSTNAME): $cible\n $BLACK $GREEN_BG"
         echo -e "Démarrer ?\n"
         echo "OUI => Appuyez sur Entrée"
         echo "NON => Appuyez sur Ctrl C"
@@ -105,7 +109,7 @@ function synchroLocal() {
     fi
     # rsync réel
     chmod -R 700 "$cible" "$backup" &&
-        rsync -rtb --backup-dir=$backup"backup_"$(date +%F)_$(date +%T) --log-format=%n%L --delete --modify-window=1 -s $source $cible
+        rsync -rtb --backup-dir=$backup"backup_"$(date +%F)_$(date +%T) --log-format=%n%L --delete --modify-window=1 --exclude=".*" -s $source $cible
     chmod -R 500 "$cible" "$backup" &&
         echo -e "$BLACK $GREEN_BG"
     echo "Terminé"
@@ -114,6 +118,5 @@ function synchroLocal() {
     read
 }
 
+
 synchroLocal
-
-
